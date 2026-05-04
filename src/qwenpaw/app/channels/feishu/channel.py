@@ -756,6 +756,22 @@ class FeishuChannel(BaseChannel):
             elif msg_type == "post":
                 text = extract_post_text(content_raw)
                 if text:
+                    # Replace mention keys in post text as well
+                    for mention in all_mentions:
+                        key = mention.get("key", "")
+                        name = mention.get("name", "")
+                        if key and name:
+                            # key may already start with @ (like @_user_1)
+                            if key.startswith("@"):
+                                text = text.replace(key, f"@{name}")
+                            else:
+                                text = text.replace(f"@{key}", f"@{name}")
+                        elif key:
+                            if key.startswith("@"):
+                                text = text.replace(key, "")
+                            else:
+                                text = text.replace(f"@{key}", "")
+                    text = text.strip()
                     text_parts.append(text)
                 # Download images in post message
                 for img_key in extract_post_image_keys(content_raw):

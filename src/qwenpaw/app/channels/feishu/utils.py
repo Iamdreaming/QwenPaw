@@ -126,13 +126,42 @@ def extract_post_text(content: Optional[str]) -> Optional[str]:
                         parts.append(f"[{text}]({href})" if text else href)
                     elif text:
                         parts.append(text.strip())
-                # at tag uses user_name
+                # at tag uses key or user_name
                 elif tag == "at":
-                    user_name = item.get("user_name") or item.get("user_id")
-                    if isinstance(user_name, str) and user_name.strip():
-                        parts.append(f"@{user_name.strip()}")
+                    # Use key if available (like @_user_1), otherwise use user_name
+                    mention_key = item.get("key")
+                    if mention_key and isinstance(mention_key, str) and mention_key.strip():
+                        parts.append(mention_key.strip())
+                    else:
+                        user_name = item.get("user_name") or item.get("user_id")
+                        if isinstance(user_name, str) and user_name.strip():
+                            parts.append(f"@{user_name.strip()}")
 
-    return " ".join(parts) if parts else None
+    # Smart join: don't add space after @mention if next part is not another @
+    if not parts:
+        return None
+    
+    result_parts: list[str] = []
+    i = 0
+    while i < len(parts):
+        part = parts[i]
+        if not part:  # Skip empty strings
+            i += 1
+            continue
+            
+        # If this part starts with @ and there's a next part
+        if part.startswith("@") and i + 1 < len(parts):
+            next_part = parts[i + 1]
+            if next_part and not next_part.startswith("@"):
+                # Append next part directly without space
+                result_parts.append(part + next_part)
+                i += 2  # Skip both current and next part
+                continue
+        
+        result_parts.append(part)
+        i += 1
+    
+    return " ".join(result_parts) if result_parts else None
 
 
 def _extract_post_keys(
