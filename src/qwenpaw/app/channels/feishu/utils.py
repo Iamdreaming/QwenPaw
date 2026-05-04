@@ -89,13 +89,22 @@ def extract_post_text(content: Optional[str]) -> Optional[str]:
 
     parts: list[str] = []
 
-    # Extract title if present
-    title = data.get("title")
-    if title and isinstance(title, str) and title.strip():
-        parts.append(title.strip())
+    # Post content can be under language keys like "zh_cn", "en_us", "ja_jp"
+    # or directly under "content" key
+    content_blocks = data.get("content") or []
+    if not content_blocks:
+        for lang_key in ("zh_cn", "en_us", "ja_jp"):
+            lang_data = data.get(lang_key)
+            if isinstance(lang_data, dict):
+                content_blocks = lang_data.get("content") or []
+                if content_blocks:
+                    # Extract title if present
+                    title = lang_data.get("title")
+                    if title and isinstance(title, str) and title.strip():
+                        parts.append(title.strip())
+                    break
 
     # Extract text from content blocks
-    content_blocks = data.get("content") or []
     if isinstance(content_blocks, list):
         for block in content_blocks:
             if not isinstance(block, list):

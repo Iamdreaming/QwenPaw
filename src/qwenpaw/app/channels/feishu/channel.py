@@ -694,6 +694,46 @@ class FeishuChannel(BaseChannel):
                         })
                 is_bot_mentioned = True
 
+            # For post type messages, check if bot is mentioned in content
+            # because mentions array may be empty for post messages
+            if not is_bot_mentioned and msg_type == "post" and self._bot_open_id:
+                try:
+                    import json as _json
+                    content_data = _json.loads(content_raw)
+                    # Post content can be under various language keys like "zh_cn"
+                    content_blocks = content_data.get("content") or []
+                    if not content_blocks:
+                        # Try language-specific keys
+                        for lang_key in ("zh_cn", "en_us", "ja_jp"):
+                            lang_data = content_data.get(lang_key)
+                            if isinstance(lang_data, dict):
+                                content_blocks = lang_data.get("content") or []
+                                if content_blocks:
+                                    break
+                    if isinstance(content_blocks, list):
+                        for block in content_blocks:
+                            if not isinstance(block, list):
+                                continue
+                            for item in block:
+                                if not isinstance(item, dict):
+                                    continue
+                                if item.get("tag") == "at":
+                                    user_name = item.get("user_name") or ""
+                                    m_key = item.get("key") or ""
+                                    m_open_id = item.get("user_id") or ""
+                                    all_mentions.append({
+                                        "open_id": m_open_id,
+                                        "name": user_name,
+                                        "key": m_key,
+                                    })
+                                    # Check if this mention matches the bot
+                                    if m_open_id == self._bot_open_id:
+                                        is_bot_mentioned = True
+                                        if m_key:
+                                            bot_mention_keys.append(m_key)
+                except (json.JSONDecodeError, Exception):
+                    pass
+
             if not is_bot_mentioned:
                 return
 

@@ -1546,6 +1546,55 @@ class TestFeishuChannelOnMessageComplex:
         assert "@_user_2" not in content_text
 
     @pytest.mark.asyncio
+    async def test_on_message_post_type_with_mention_processed(
+        self,
+        feishu_channel,
+        mock_message_data,
+    ):
+        """Test post type messages (long text) with @mention are processed."""
+        feishu_channel._bot_open_id = "bot_open_id_123"
+        feishu_channel._enqueue = MagicMock()
+        mock_message_data.event.sender.sender_type = "user"
+        mock_message_data.event.message.chat_type = "group"
+        mock_message_data.event.message.chat_id = "oc_group_123"
+        mock_message_data.event.message.message_type = "post"
+        mock_message_data.event.message.mentions = []
+        mock_message_data.event.message.content = json.dumps({
+            "zh_cn": {
+                "title": "",
+                "content": [
+                    [
+                        {
+                            "tag": "at",
+                            "user_name": "小说作家",
+                            "user_id": "bot_open_id_123",
+                            "key": "@_user_1",
+                        },
+                    ],
+                    [
+                        {
+                            "tag": "text",
+                            "text": "这是一段很长的文本内容，超过飞书text类型限制会自动转为post类型",
+                        },
+                    ],
+                ],
+            },
+        })
+
+        await feishu_channel._on_message(mock_message_data)
+
+        assert "msg_12345" in feishu_channel._processed_message_ids
+        feishu_channel._enqueue.assert_called_once()
+        call_args = feishu_channel._enqueue.call_args[0][0]
+        meta = call_args.get("meta", {})
+        assert "feishu_mentions" in meta
+        mentions = meta["feishu_mentions"]
+        assert len(mentions) == 1
+        assert mentions[0]["name"] == "小说作家"
+        content_text = str(call_args["content_parts"])
+        assert "@小说作家" in content_text
+
+    @pytest.mark.asyncio
     async def test_on_message_empty_data_returns_early(self, feishu_channel):
         """Test None data returns early."""
         feishu_channel._process = AsyncMock()
