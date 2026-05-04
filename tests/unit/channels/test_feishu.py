@@ -1454,18 +1454,49 @@ class TestFeishuChannelOnMessageComplex:
         await feishu_channel._on_message(mock_message_data)
 
     @pytest.mark.asyncio
-    async def test_on_message_bot_sender_skipped(
+    async def test_on_message_bot_sender_without_mention_skipped(
         self,
         feishu_channel,
         mock_message_data,
     ):
-        """Test bot messages are ignored."""
-        feishu_channel._process = AsyncMock()
+        """Test bot messages without mentioning current bot are ignored."""
+        feishu_channel._bot_open_id = "bot_open_id_123"
         mock_message_data.event.sender.sender_type = "bot"
+        mock_message_data.event.message.mentions = []
+        mock_message_data.event.message.content = '{"text": "Hello from bot"}'
 
         await feishu_channel._on_message(mock_message_data)
 
-        feishu_channel._process.assert_not_called()
+        assert "msg_12345" in feishu_channel._processed_message_ids
+
+    @pytest.mark.asyncio
+    async def test_on_message_bot_sender_with_mention_processed(
+        self,
+        feishu_channel,
+        mock_message_data,
+    ):
+        """Test bot messages that mention current bot are processed."""
+        feishu_channel._bot_open_id = "bot_open_id_123"
+        feishu_channel._enqueue = MagicMock()
+        mock_message_data.event.sender.sender_type = "bot"
+        mock_message_data.event.sender.sender_id.open_id = "other_bot_id"
+        mock_message_data.event.sender.name = "OtherBot"
+        mock_message_data.event.message.chat_type = "group"
+        mock_message_data.event.message.chat_id = "oc_group_123"
+        mock_message_data.event.message.mentions = [
+            MagicMock(
+                id=MagicMock(open_id="bot_open_id_123"),
+                key="@_user_1",
+            ),
+        ]
+        mock_message_data.event.message.content = (
+            '{"text": "@_user_1 Hello bot"}'
+        )
+
+        await feishu_channel._on_message(mock_message_data)
+
+        assert "msg_12345" in feishu_channel._processed_message_ids
+        feishu_channel._enqueue.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_on_message_empty_data_returns_early(self, feishu_channel):

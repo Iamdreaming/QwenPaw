@@ -628,9 +628,7 @@ class FeishuChannel(BaseChannel):
                 self._processed_message_ids.popitem(last=False)
 
             sender_type = getattr(sender, "sender_type", "") or ""
-            if sender_type == "bot":
-                return
-
+            
             sender_id_obj = getattr(sender, "sender_id", None)
             sender_id = ""
             if sender_id_obj and getattr(sender_id_obj, "open_id", None):
@@ -673,6 +671,9 @@ class FeishuChannel(BaseChannel):
                         key = getattr(m, "key", None) or ""
                         if key:
                             bot_mention_keys.append(key)
+
+            if sender_type == "bot" and not is_bot_mentioned:
+                return
 
             content_parts: List[Any] = []
             text_parts: List[str] = []
