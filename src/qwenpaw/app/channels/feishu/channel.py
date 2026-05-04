@@ -658,6 +658,7 @@ class FeishuChannel(BaseChannel):
             mentions_raw = getattr(message, "mentions", None) or []
             is_bot_mentioned = False
             bot_mention_keys: List[str] = []
+            all_mentions: List[Dict[str, str]] = []
             if "@_all" in content_raw:
                 is_bot_mentioned = True
             if self._bot_open_id and mentions_raw:
@@ -666,13 +667,34 @@ class FeishuChannel(BaseChannel):
                     if not m_id:
                         continue
                     m_open_id = getattr(m_id, "open_id", None) or ""
+                    m_name = getattr(m, "name", "") or ""
+                    m_key = getattr(m, "key", None) or ""
+                    all_mentions.append({
+                        "open_id": m_open_id,
+                        "name": m_name,
+                        "key": m_key,
+                    })
                     if m_open_id == self._bot_open_id:
                         is_bot_mentioned = True
-                        key = getattr(m, "key", None) or ""
-                        if key:
-                            bot_mention_keys.append(key)
+                        if m_key:
+                            bot_mention_keys.append(m_key)
+            elif not self._bot_open_id:
+                if mentions_raw:
+                    for m in mentions_raw:
+                        m_id = getattr(m, "id", None)
+                        if not m_id:
+                            continue
+                        m_open_id = getattr(m_id, "open_id", None) or ""
+                        m_name = getattr(m, "name", "") or ""
+                        m_key = getattr(m, "key", None) or ""
+                        all_mentions.append({
+                            "open_id": m_open_id,
+                            "name": m_name,
+                            "key": m_key,
+                        })
+                is_bot_mentioned = True
 
-            if sender_type == "bot" and not is_bot_mentioned:
+            if not is_bot_mentioned:
                 return
 
             content_parts: List[Any] = []
@@ -681,8 +703,13 @@ class FeishuChannel(BaseChannel):
             if msg_type == "text":
                 text = extract_json_key(content_raw, "text")
                 if text:
-                    for key in bot_mention_keys:
-                        text = text.replace(key, "")
+                    for mention in all_mentions:
+                        key = mention.get("key", "")
+                        name = mention.get("name", "")
+                        if key and name:
+                            text = text.replace(key, f"@{name}")
+                        elif key:
+                            text = text.replace(key, "")
                     text = text.strip()
                 if text:
                     text_parts.append(text)
@@ -868,6 +895,8 @@ class FeishuChannel(BaseChannel):
             meta["feishu_receive_id_type"] = receive_id_type
             if is_bot_mentioned:
                 meta["bot_mentioned"] = True
+            if all_mentions:
+                meta["feishu_mentions"] = all_mentions
 
             allowed, error_msg = self._check_allowlist(
                 sender_id,

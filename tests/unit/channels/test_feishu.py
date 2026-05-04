@@ -1499,6 +1499,53 @@ class TestFeishuChannelOnMessageComplex:
         feishu_channel._enqueue.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_on_message_multiple_mentions_preserved(
+        self,
+        feishu_channel,
+        mock_message_data,
+    ):
+        """Test that multiple @mentions are preserved in meta."""
+        feishu_channel._bot_open_id = "bot_open_id_123"
+        feishu_channel._enqueue = MagicMock()
+        mock_message_data.event.sender.sender_type = "user"
+        mock_message_data.event.message.chat_type = "group"
+        mock_message_data.event.message.chat_id = "oc_group_123"
+        
+        mention1 = MagicMock()
+        mention1.id = MagicMock()
+        mention1.id.open_id = "bot_open_id_123"
+        mention1.key = "@_user_1"
+        mention1.name = "小说作家"
+        
+        mention2 = MagicMock()
+        mention2.id = MagicMock()
+        mention2.id.open_id = "other_bot_id"
+        mention2.key = "@_user_2"
+        mention2.name = "小说编辑"
+        
+        mock_message_data.event.message.mentions = [mention1, mention2]
+        mock_message_data.event.message.content = (
+            '{"text": "@_user_1 @_user_2 请处理这个内容"}'
+        )
+
+        await feishu_channel._on_message(mock_message_data)
+
+        assert "msg_12345" in feishu_channel._processed_message_ids
+        feishu_channel._enqueue.assert_called_once()
+        call_args = feishu_channel._enqueue.call_args[0][0]
+        meta = call_args.get("meta", {})
+        assert "feishu_mentions" in meta
+        mentions = meta["feishu_mentions"]
+        assert len(mentions) == 2
+        assert mentions[0]["name"] == "小说作家"
+        assert mentions[1]["name"] == "小说编辑"
+        content_text = str(call_args["content_parts"])
+        assert "@小说作家" in content_text
+        assert "@小说编辑" in content_text
+        assert "@_user_1" not in content_text
+        assert "@_user_2" not in content_text
+
+    @pytest.mark.asyncio
     async def test_on_message_empty_data_returns_early(self, feishu_channel):
         """Test None data returns early."""
         feishu_channel._process = AsyncMock()
